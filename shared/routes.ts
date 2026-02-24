@@ -20,6 +20,22 @@ export const errorSchemas = {
 
 // API Contract
 export const api = {
+  auth: {
+    login: {
+      method: 'POST' as const,
+      path: '/api/auth/login' as const,
+      input: z.object({ username: z.string().min(1), password: z.string().min(1) }),
+    },
+    register: {
+      method: 'POST' as const,
+      path: '/api/auth/register' as const,
+      input: z.object({ username: z.string().min(3), password: z.string().min(6) }),
+    },
+    logout: {
+      method: 'POST' as const,
+      path: '/api/auth/logout' as const,
+    },
+  },
   users: {
     me: {
       method: 'GET' as const,

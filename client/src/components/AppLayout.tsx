@@ -1,15 +1,31 @@
 import { Link, useLocation } from "wouter";
-import { Home, Clock, Settings, ShoppingBag } from "lucide-react";
+import { Home, Clock, Settings, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMe, useLogout } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+  const { data: user } = useMe();
+  const logout = useLogout();
+  const { toast } = useToast();
 
   const navItems = [
     { href: "/", icon: Home, label: "Beranda" },
     { href: "/history", icon: Clock, label: "Riwayat" },
-    { href: "/admin", icon: Settings, label: "Admin" },
+    ...(user?.role === "admin" ? [{ href: "/admin", icon: Settings, label: "Admin" }] : []),
   ];
+
+  const handleLogout = () => {
+    logout.mutate(undefined, {
+      onSuccess: () => {
+        setLocation("/login");
+      },
+      onError: () => {
+        toast({ title: "Gagal logout", variant: "destructive" });
+      },
+    });
+  };
 
   return (
     <div className="h-screen bg-background flex justify-center items-center sm:py-8 overflow-hidden">
@@ -48,6 +64,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
+
+            <button
+              onClick={handleLogout}
+              data-testid="button-logout"
+              disabled={logout.isPending}
+              className="flex-1 flex flex-col items-center justify-center gap-1 group"
+            >
+              <div className="p-2 rounded-xl transition-all duration-300 text-gray-400 group-hover:text-destructive">
+                <LogOut className="w-6 h-6" />
+              </div>
+              <span className="text-[10px] font-semibold text-gray-400 group-hover:text-destructive transition-colors">
+                Keluar
+              </span>
+            </button>
           </div>
         </nav>
       </div>

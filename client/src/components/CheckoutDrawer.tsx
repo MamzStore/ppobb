@@ -7,6 +7,7 @@ import { X, CheckCircle2, AlertCircle } from "lucide-react";
 import { type Product } from "@shared/schema";
 import { formatRupiah, cn } from "@/lib/utils";
 import { useCreateTransaction } from "@/hooks/use-transactions";
+import { useMe } from "@/hooks/use-auth";
 
 interface CheckoutDrawerProps {
   product: Product | null;
@@ -24,6 +25,7 @@ export function CheckoutDrawer({ product, isOpen, onClose }: CheckoutDrawerProps
   const [successStatus, setSuccessStatus] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>("");
   const createMutation = useCreateTransaction();
+  const { data: me } = useMe();
 
   const {
     register,
@@ -42,7 +44,7 @@ export function CheckoutDrawer({ product, isOpen, onClose }: CheckoutDrawerProps
       {
         productId: product.id,
         targetNumber: data.targetNumber,
-        userId: 1,
+        userId: me?.id ?? 0,
       },
       {
         onSuccess: () => {

@@ -7,6 +7,8 @@ import { z } from "zod";
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
+  password: text("password").notNull().default(""),
+  role: text("role").notNull().default("user"), // "user" | "admin"
   balance: integer("balance").notNull().default(0), // Balance in cents/rupiah
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -76,7 +78,7 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
 
 // === BASE SCHEMAS ===
 export const insertTopupSchema = createInsertSchema(topups).omit({ id: true, createdAt: true, status: true, amountUnique: true, trxId: true, qrString: true, expiredAt: true });
-export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, role: true, balance: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true });
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
 export const insertTransactionSchema = createInsertSchema(transactions).omit({ 

@@ -7,6 +7,7 @@ import { useCreateTopup, useTopupStatus, useTopups } from "@/hooks/use-topup";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatRupiah } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useMe } from "@/hooks/use-auth";
 import type { Topup } from "@shared/schema";
 
 const PRESET_AMOUNTS = [10000, 20000, 50000, 100000, 200000, 500000];
@@ -41,6 +42,7 @@ export default function Topup() {
   const searchString = useSearch();
   const params = new URLSearchParams(searchString);
   const resumeId = params.get("resume") ? parseInt(params.get("resume")!) : null;
+  const { data: me } = useMe();
 
   const [step, setStep] = useState<Step>("select");
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
@@ -117,7 +119,7 @@ export default function Topup() {
       return;
     }
     try {
-      const result = await createTopup.mutateAsync({ amount: effectiveAmount, userId: 1 });
+      const result = await createTopup.mutateAsync({ amount: effectiveAmount, userId: me?.id ?? 0 });
       setTopupId(result.id);
       setStep("qris");
     } catch (err: any) {

@@ -1,10 +1,29 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api, topupApi } from "@shared/routes";
 import { z } from "zod";
+import bcrypt from "bcrypt";
 import { createMamzTransaction, checkMamzStatus } from "./mamzstore";
 import { createMamzPayment } from "./mamzpay";
+
+// === MIDDLEWARE ===
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.session.userId) {
+    return res.status(401).json({ message: "Silakan login terlebih dahulu" });
+  }
+  next();
+}
+
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.session.userId) {
+    return res.status(401).json({ message: "Silakan login terlebih dahulu" });
+  }
+  if (req.session.userRole !== "admin") {
+    return res.status(403).json({ message: "Akses ditolak: hanya admin" });
+  }
+  next();
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -13,11 +32,71 @@ export async function registerRoutes(
 
   seedDatabase().catch(console.error);
 
+  // === AUTH ===
+
+  app.post(api.auth.register.path, async (req, res) => {
+    try {
+      const input = api.auth.register.input.parse(req.body);
+      const existing = await storage.getUserByUsername(input.username);
+      if (existing) {
+        return res.status(400).json({ message: "Username sudah digunakan" });
+      }
+      const hashed = await bcrypt.hash(input.password, 10);
+      const user = await storage.createUser({ username: input.username, password: hashed, role: "user" });
+      req.session.userId = user.id;
+      req.session.userRole = user.role;
+      const { password: _, ...safeUser } = user;
+      res.status(201).json(safeUser);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Register error:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post(api.auth.login.path, async (req, res) => {
+    try {
+      const input = api.auth.login.input.parse(req.body);
+      const user = await storage.getUserByUsername(input.username);
+      if (!user) {
+        return res.status(401).json({ message: "Username atau password salah" });
+      }
+      const valid = user.password
+        ? await bcrypt.compare(input.password, user.password)
+        : false;
+      if (!valid) {
+        return res.status(401).json({ message: "Username atau password salah" });
+      }
+      req.session.userId = user.id;
+      req.session.userRole = user.role;
+      const { password: _, ...safeUser } = user;
+      res.json(safeUser);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Login error:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post(api.auth.logout.path, (req, res) => {
+    req.session.destroy(() => {
+      res.json({ ok: true });
+    });
+  });
+
   // === USERS ===
   app.get(api.users.me.path, async (req, res) => {
-    const user = await storage.getUser(1);
+    if (!req.session.userId) {
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+    }
+    const user = await storage.getUser(req.session.userId);
     if (!user) return res.status(404).json({ message: "User not found" });
-    res.json(user);
+    const { password: _, ...safeUser } = user;
+    res.json(safeUser);
   });
 
   // === CATEGORIES ===
@@ -33,7 +112,7 @@ export async function registerRoutes(
     res.json(prods);
   });
 
-  app.post(api.products.create.path, async (req, res) => {
+  app.post(api.products.create.path, requireAdmin, async (req, res) => {
     try {
       const input = api.products.create.input.parse(req.body);
       const product = await storage.createProduct(input);
@@ -46,7 +125,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch(api.products.update.path, async (req, res) => {
+  app.patch(api.products.update.path, requireAdmin, async (req, res) => {
     try {
       const id = Number(req.params.id);
       const input = api.products.update.input.parse(req.body);
@@ -62,7 +141,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete(api.products.delete.path, async (req, res) => {
+  app.delete(api.products.delete.path, requireAdmin, async (req, res) => {
     const id = Number(req.params.id);
     const existing = await storage.getProduct(id);
     if (!existing) return res.status(404).json({ message: "Produk tidak ditemukan" });
@@ -71,12 +150,12 @@ export async function registerRoutes(
   });
 
   // === ADMIN ===
-  app.get(api.admin.listUsers.path, async (req, res) => {
+  app.get(api.admin.listUsers.path, requireAdmin, async (req, res) => {
     const users = await storage.getAllUsers();
-    res.json(users);
+    res.json(users.map(({ password: _, ...u }) => u));
   });
 
-  app.post(api.admin.adjustBalance.path, async (req, res) => {
+  app.post(api.admin.adjustBalance.path, requireAdmin, async (req, res) => {
     try {
       const id = Number(req.params.id);
       const input = api.admin.adjustBalance.input.parse(req.body);
@@ -95,7 +174,8 @@ export async function registerRoutes(
       }
 
       const updated = await storage.updateUserBalance(id, newBalance);
-      res.json(updated);
+      const { password: _, ...safeUser } = updated;
+      res.json(safeUser);
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: err.errors[0].message });
@@ -105,40 +185,37 @@ export async function registerRoutes(
   });
 
   // === TRANSACTIONS ===
-  app.get(api.transactions.list.path, async (req, res) => {
-    const txs = await storage.getTransactions(1);
+  app.get(api.transactions.list.path, requireAuth, async (req, res) => {
+    const txs = await storage.getTransactions(req.session.userId!);
     res.json(txs);
   });
 
-  app.get(api.transactions.get.path, async (req, res) => {
+  app.get(api.transactions.get.path, requireAuth, async (req, res) => {
     const tx = await storage.getTransaction(Number(req.params.id));
     if (!tx) return res.status(404).json({ message: "Transaksi tidak ditemukan" });
     res.json(tx);
   });
 
-  app.post(api.transactions.create.path, async (req, res) => {
+  app.post(api.transactions.create.path, requireAuth, async (req, res) => {
     try {
       const input = api.transactions.create.input.parse(req.body);
+      const userId = req.session.userId!;
 
       const product = await storage.getProduct(input.productId);
       if (!product) return res.status(400).json({ message: "Produk tidak ditemukan" });
-
       if (!product.isActive) return res.status(400).json({ message: "Produk tidak tersedia saat ini" });
 
-      const user = await storage.getUser(input.userId);
+      const user = await storage.getUser(userId);
       if (!user) return res.status(400).json({ message: "User tidak ditemukan" });
 
       if (user.balance < product.price) {
         return res.status(400).json({ message: "Saldo tidak cukup" });
       }
 
-      // Deduct balance
       await storage.updateUserBalance(user.id, user.balance - product.price);
 
-      // Create transaction record
-      let tx = await storage.createTransaction({ ...input, amount: product.price });
+      let tx = await storage.createTransaction({ ...input, userId, amount: product.price });
 
-      // Call MamzStore API
       if (process.env.MAMZSTORE_API_KEY) {
         try {
           const mamzResponse = await createMamzTransaction(product.code, input.targetNumber);
@@ -148,7 +225,6 @@ export async function registerRoutes(
               status: "pending",
             });
           } else {
-            // Refund on MamzStore failure
             await storage.updateUserBalance(user.id, user.balance);
             await storage.updateTransaction(tx.id, { status: "failed" });
             return res.status(400).json({ message: mamzResponse.message || "Transaksi ditolak provider" });
@@ -171,13 +247,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post(api.transactions.checkStatus.path, async (req, res) => {
+  app.post(api.transactions.checkStatus.path, requireAuth, async (req, res) => {
     try {
       const tx = await storage.getTransaction(Number(req.params.id));
       if (!tx) return res.status(404).json({ message: "Transaksi tidak ditemukan" });
-
       if (!tx.refId) return res.status(400).json({ message: "Transaksi belum memiliki ref_id dari provider" });
-
       if (!process.env.MAMZSTORE_API_KEY) return res.status(400).json({ message: "API Key belum dikonfigurasi" });
 
       const statusResponse = await checkMamzStatus(tx.refId);
@@ -196,7 +270,6 @@ export async function registerRoutes(
         serialNumber = sn || undefined;
       } else if (mamzStatus === "Gagal") {
         newStatus = "failed";
-        // Refund if not already failed
         if (tx.status !== "failed") {
           const user = await storage.getUser(tx.userId);
           if (user) await storage.updateUserBalance(user.id, user.balance + tx.amount);
@@ -217,10 +290,10 @@ export async function registerRoutes(
 
   // === TOPUP ===
 
-  // Create QRIS payment
-  app.post(topupApi.create.path, async (req, res) => {
+  app.post(topupApi.create.path, requireAuth, async (req, res) => {
     try {
       const input = topupApi.create.input.parse(req.body);
+      const userId = req.session.userId!;
 
       if (!process.env.MAMZPAY_API_KEY) {
         return res.status(400).json({ message: "MAMZPAY_API_KEY belum dikonfigurasi. Tambahkan di Secrets." });
@@ -241,8 +314,7 @@ export async function registerRoutes(
       const { trx_id, amount_unique, qr_string, expired_in } = mamzResponse.data;
       const expiredAt = new Date(Date.now() + expired_in * 1000);
 
-      // Create topup record
-      let topup = await storage.createTopup({ userId: input.userId, amount: input.amount, refId });
+      let topup = await storage.createTopup({ userId, amount: input.amount, refId });
       topup = await storage.updateTopup(topup.id, {
         trxId: trx_id,
         amountUnique: amount_unique,
@@ -257,10 +329,10 @@ export async function registerRoutes(
     }
   });
 
-  // MamzPay webhook — called by MamzPay when payment is confirmed
+  // Webhook — no auth required (called by payment gateway)
   app.post(topupApi.webhook.path, async (req, res) => {
     try {
-      const { status, ref_id, amount_received, trx_id_gateway } = req.body;
+      const { status, ref_id } = req.body;
 
       if (status !== "PAID" || !ref_id) {
         return res.status(400).json({ message: "Invalid webhook payload" });
@@ -269,16 +341,15 @@ export async function registerRoutes(
       const topup = await storage.getTopupByRefId(ref_id);
       if (!topup) {
         console.warn(`Webhook: topup not found for ref_id=${ref_id}`);
-        return res.status(200).json({ ok: true }); // Still 200 so MamzPay doesn't retry
+        return res.status(200).json({ ok: true });
       }
 
       if (topup.status === "paid") {
-        return res.status(200).json({ ok: true }); // Idempotent
+        return res.status(200).json({ ok: true });
       }
 
       await storage.updateTopup(topup.id, { status: "paid" });
 
-      // Add balance to user
       const user = await storage.getUser(topup.userId);
       if (user) {
         await storage.updateUserBalance(user.id, user.balance + topup.amount);
@@ -292,16 +363,14 @@ export async function registerRoutes(
     }
   });
 
-  // Get single topup status (for polling)
-  app.get("/api/topup/:id", async (req, res) => {
+  app.get("/api/topup/:id", requireAuth, async (req, res) => {
     const topup = await storage.getTopup(Number(req.params.id));
     if (!topup) return res.status(404).json({ message: "Topup tidak ditemukan" });
     res.json(topup);
   });
 
-  // List topup history for current user
-  app.get("/api/topup", async (req, res) => {
-    const topups = await storage.getTopups(1);
+  app.get("/api/topup", requireAuth, async (req, res) => {
+    const topups = await storage.getTopups(req.session.userId!);
     res.json(topups);
   });
 
@@ -312,9 +381,17 @@ async function seedDatabase() {
   const { db } = await import("./db");
   const { users, categories, products } = await import("@shared/schema");
 
-  let user = await storage.getUser(1);
-  if (!user) {
-    await db.insert(users).values({ id: 1, username: "testuser", balance: 500000 });
+  // Seed admin user if no users exist
+  const allUsers = await storage.getAllUsers();
+  if (allUsers.length === 0) {
+    const hashed = await bcrypt.hash("admin123", 10);
+    await db.insert(users).values({
+      username: "admin",
+      password: hashed,
+      role: "admin",
+      balance: 0,
+    });
+    console.log("[Seed] Admin user created: admin / admin123");
   }
 
   const cats = await storage.getCategories();
@@ -344,8 +421,6 @@ async function seedDatabase() {
         prodsToInsert.push(
           { categoryId: dataCat, brand: "Telkomsel", subBrand: "Reguler", name: "Tsel Reguler 1GB 7 Hari", code: "TSELD1G7H", price: 15000 },
           { categoryId: dataCat, brand: "Telkomsel", subBrand: "Reguler", name: "Tsel Reguler 5GB 30 Hari", code: "TSELD5G30H", price: 55000 },
-          { categoryId: dataCat, brand: "Telkomsel", subBrand: "Khusus Jateng", name: "Tsel Jateng 2GB 7 Hari", code: "TSELDJT2G", price: 12000 },
-          { categoryId: dataCat, brand: "Telkomsel", subBrand: "Khusus Jateng", name: "Tsel Jateng 5GB 30 Hari", code: "TSELDJT5G", price: 40000 },
           { categoryId: dataCat, brand: "XL", subBrand: "Reguler", name: "XL Reguler 10GB", code: "XLD10G", price: 85000 },
           { categoryId: dataCat, brand: "XL", subBrand: "Xtra On", name: "XL Xtra On 1GB", code: "XLXO1G", price: 10000 },
           { categoryId: dataCat, brand: "Indosat", name: "Indosat 3GB 30 Hari", code: "ISATD3G", price: 35000 }
@@ -358,14 +433,13 @@ async function seedDatabase() {
           { categoryId: plnCat, name: "Token PLN 100.000", code: "PLN100", price: 102000 }
         );
       }
-
       if (prodsToInsert.length > 0) {
         await db.insert(products).values(prodsToInsert as any);
       }
     }
   }
 
-  // Seed E-Wallet category separately (runs even if other categories already exist)
+  // Seed E-Wallet category separately
   const ewalletCat = (await storage.getCategories()).find(c => c.slug === "ewallet");
   if (!ewalletCat) {
     const [inserted] = await db.insert(categories).values(
@@ -375,31 +449,26 @@ async function seedDatabase() {
     if (inserted) {
       const cid = inserted.id;
       await db.insert(products).values([
-        // GoPay
         { categoryId: cid, brand: "GoPay", name: "GoPay 10.000", code: "GOPAY10", price: 11000 },
         { categoryId: cid, brand: "GoPay", name: "GoPay 20.000", code: "GOPAY20", price: 21000 },
         { categoryId: cid, brand: "GoPay", name: "GoPay 50.000", code: "GOPAY50", price: 51000 },
         { categoryId: cid, brand: "GoPay", name: "GoPay 100.000", code: "GOPAY100", price: 101000 },
         { categoryId: cid, brand: "GoPay", name: "GoPay 200.000", code: "GOPAY200", price: 201000 },
-        // OVO
         { categoryId: cid, brand: "OVO", name: "OVO 10.000", code: "OVO10", price: 11000 },
         { categoryId: cid, brand: "OVO", name: "OVO 20.000", code: "OVO20", price: 21000 },
         { categoryId: cid, brand: "OVO", name: "OVO 50.000", code: "OVO50", price: 51000 },
         { categoryId: cid, brand: "OVO", name: "OVO 100.000", code: "OVO100", price: 101000 },
         { categoryId: cid, brand: "OVO", name: "OVO 200.000", code: "OVO200", price: 201000 },
-        // Dana
         { categoryId: cid, brand: "Dana", name: "Dana 10.000", code: "DANA10", price: 11000 },
         { categoryId: cid, brand: "Dana", name: "Dana 20.000", code: "DANA20", price: 21000 },
         { categoryId: cid, brand: "Dana", name: "Dana 50.000", code: "DANA50", price: 51000 },
         { categoryId: cid, brand: "Dana", name: "Dana 100.000", code: "DANA100", price: 101000 },
         { categoryId: cid, brand: "Dana", name: "Dana 200.000", code: "DANA200", price: 201000 },
-        // ShopeePay
         { categoryId: cid, brand: "ShopeePay", name: "ShopeePay 10.000", code: "SPAY10", price: 11000 },
         { categoryId: cid, brand: "ShopeePay", name: "ShopeePay 20.000", code: "SPAY20", price: 21000 },
         { categoryId: cid, brand: "ShopeePay", name: "ShopeePay 50.000", code: "SPAY50", price: 51000 },
         { categoryId: cid, brand: "ShopeePay", name: "ShopeePay 100.000", code: "SPAY100", price: 101000 },
         { categoryId: cid, brand: "ShopeePay", name: "ShopeePay 200.000", code: "SPAY200", price: 201000 },
-        // LinkAja
         { categoryId: cid, brand: "LinkAja", name: "LinkAja 10.000", code: "LINKAJA10", price: 11000 },
         { categoryId: cid, brand: "LinkAja", name: "LinkAja 20.000", code: "LINKAJA20", price: 21000 },
         { categoryId: cid, brand: "LinkAja", name: "LinkAja 50.000", code: "LINKAJA50", price: 51000 },
