@@ -5,7 +5,7 @@ import { useCategories } from "@/hooks/use-categories";
 import { formatRupiah } from "@/lib/utils";
 import {
   Plus, Trash2, Pencil, ChevronDown, ChevronUp,
-  Users, Package, ToggleLeft, ToggleRight, Check, X
+  Users, Package, ToggleLeft, ToggleRight, Check, X, Search
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -193,6 +193,11 @@ function ProductsPanel({ toast, queryClient }: any) {
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
   const [newProduct, setNewProduct] = useState({ categoryId: "", brand: "", subBrand: "", name: "", code: "", price: "" });
 
+  // Filter state
+  const [filterCatId, setFilterCatId] = useState<number | null>(null);
+  const [filterBrand, setFilterBrand] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
   const createProduct = useMutation({
     mutationFn: async (data: any) => {
       const res = await fetch(api.products.create.path, {
@@ -330,10 +335,103 @@ function ProductsPanel({ toast, queryClient }: any) {
     </div>
   );
 
+  // Derived filter data
+  const catProducts = filterCatId ? (products || []).filter((p: any) => p.categoryId === filterCatId) : (products || []);
+  const availableBrands = Array.from(new Set(catProducts.filter((p: any) => p.brand).map((p: any) => p.brand as string))).sort();
+
+  const filteredProducts = (products || []).filter((p: any) => {
+    if (filterCatId && p.categoryId !== filterCatId) return false;
+    if (filterBrand && p.brand !== filterBrand) return false;
+    if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase()) && !p.code.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    return true;
+  });
+
+  const handleCatFilter = (catId: number | null) => {
+    setFilterCatId(catId);
+    setFilterBrand(null);
+  };
+
   if (isLoading) return <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-20 bg-gray-200 rounded-2xl animate-pulse" />)}</div>;
 
   return (
     <div className="space-y-3">
+      {/* Filter: Kategori */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Filter Kategori</p>
+        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+          <button
+            onClick={() => handleCatFilter(null)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+              filterCatId === null ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"
+            }`}
+          >
+            Semua
+          </button>
+          {categories?.map((cat: any) => (
+            <button
+              key={cat.id}
+              onClick={() => handleCatFilter(cat.id)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                filterCatId === cat.id ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Filter: Brand (muncul saat kategori dipilih dan ada brand) */}
+        {filterCatId && availableBrands.length > 0 && (
+          <>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Filter Brand</p>
+            <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+              <button
+                onClick={() => setFilterBrand(null)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  filterBrand === null ? "bg-primary text-white" : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                Semua
+              </button>
+              {availableBrands.map((brand) => (
+                <button
+                  key={brand}
+                  onClick={() => setFilterBrand(brand)}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                    filterBrand === brand ? "bg-primary text-white" : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {brand}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Cari nama / kode SKU..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            data-testid="input-search-admin-product"
+            className="w-full pl-9 pr-4 py-2 bg-gray-50 border-2 border-gray-100 focus:border-primary rounded-xl text-sm outline-none transition-all"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Counter */}
+        <p className="text-xs text-gray-400 font-medium">
+          Menampilkan <span className="font-bold text-gray-700">{filteredProducts.length}</span> dari <span className="font-bold text-gray-700">{products?.length || 0}</span> produk
+        </p>
+      </div>
+
       {!showAddForm && (
         <button
           onClick={() => setShowAddForm(true)}
@@ -355,7 +453,15 @@ function ProductsPanel({ toast, queryClient }: any) {
         />
       )}
 
-      {products?.map((product: any) => {
+      {filteredProducts.length === 0 && !showAddForm && (
+        <div className="py-12 flex flex-col items-center text-center text-gray-400">
+          <Search className="w-10 h-10 mb-3 opacity-40" />
+          <p className="font-semibold text-gray-600">Tidak ada produk ditemukan</p>
+          <p className="text-sm mt-1">Coba ubah filter atau kata kunci pencarian</p>
+        </div>
+      )}
+
+      {filteredProducts.map((product: any) => {
         const cat = categories?.find((c: any) => c.id === product.categoryId);
         return (
           <div key={product.id} data-testid={`product-card-${product.id}`} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
