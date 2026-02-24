@@ -191,7 +191,7 @@ function ProductsPanel({ toast, queryClient }: any) {
   const { data: categories } = useCategories();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
-  const [newProduct, setNewProduct] = useState({ categoryId: "", name: "", code: "", price: "" });
+  const [newProduct, setNewProduct] = useState({ categoryId: "", brand: "", subBrand: "", name: "", code: "", price: "" });
 
   const createProduct = useMutation({
     mutationFn: async (data: any) => {
@@ -279,6 +279,20 @@ function ProductsPanel({ toast, queryClient }: any) {
         <option value="">Pilih Kategori</option>
         {categories?.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
+      <div className="flex gap-2">
+        <input
+          value={data.brand || ""}
+          onChange={e => onChange({ ...data, brand: e.target.value })}
+          placeholder="Brand (misal: Telkomsel)"
+          className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-sm outline-none focus:border-primary"
+        />
+        <input
+          value={data.subBrand || ""}
+          onChange={e => onChange({ ...data, subBrand: e.target.value })}
+          placeholder="Sub-brand (misal: Reguler)"
+          className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-sm outline-none focus:border-primary"
+        />
+      </div>
       <input
         value={data.name}
         onChange={e => onChange({ ...data, name: e.target.value })}

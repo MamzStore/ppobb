@@ -243,26 +243,33 @@ async function seedDatabase() {
       const prodsToInsert: any[] = [];
       if (pulsaCat) {
         prodsToInsert.push(
-          { categoryId: pulsaCat, name: "Telkomsel 10.000", code: "TSEL10", price: 10500 },
-          { categoryId: pulsaCat, name: "Telkomsel 20.000", code: "TSEL20", price: 20500 },
-          { categoryId: pulsaCat, name: "Indosat 10.000", code: "ISAT10", price: 10500 }
+          { categoryId: pulsaCat, brand: "Telkomsel", name: "Telkomsel 10.000", code: "TSEL10", price: 10500 },
+          { categoryId: pulsaCat, brand: "Telkomsel", name: "Telkomsel 20.000", code: "TSEL20", price: 20500 },
+          { categoryId: pulsaCat, brand: "Indosat", name: "Indosat 10.000", code: "ISAT10", price: 10500 },
+          { categoryId: pulsaCat, brand: "XL", name: "XL 10.000", code: "XL10", price: 10500 }
         );
       }
       if (dataCat) {
         prodsToInsert.push(
-          { categoryId: dataCat, name: "Data Tsel 5GB", code: "TSELD5", price: 55000 },
-          { categoryId: dataCat, name: "Data XL 10GB", code: "XLD10", price: 85000 }
+          { categoryId: dataCat, brand: "Telkomsel", subBrand: "Reguler", name: "Tsel Reguler 1GB 7 Hari", code: "TSELD1G7H", price: 15000 },
+          { categoryId: dataCat, brand: "Telkomsel", subBrand: "Reguler", name: "Tsel Reguler 5GB 30 Hari", code: "TSELD5G30H", price: 55000 },
+          { categoryId: dataCat, brand: "Telkomsel", subBrand: "Khusus Jateng", name: "Tsel Jateng 2GB 7 Hari", code: "TSELDJT2G", price: 12000 },
+          { categoryId: dataCat, brand: "Telkomsel", subBrand: "Khusus Jateng", name: "Tsel Jateng 5GB 30 Hari", code: "TSELDJT5G", price: 40000 },
+          { categoryId: dataCat, brand: "XL", subBrand: "Reguler", name: "XL Reguler 10GB", code: "XLD10G", price: 85000 },
+          { categoryId: dataCat, brand: "XL", subBrand: "Xtra On", name: "XL Xtra On 1GB", code: "XLXO1G", price: 10000 },
+          { categoryId: dataCat, brand: "Indosat", name: "Indosat 3GB 30 Hari", code: "ISATD3G", price: 35000 }
         );
       }
       if (plnCat) {
         prodsToInsert.push(
           { categoryId: plnCat, name: "Token PLN 20.000", code: "PLN20", price: 22000 },
-          { categoryId: plnCat, name: "Token PLN 50.000", code: "PLN50", price: 52000 }
+          { categoryId: plnCat, name: "Token PLN 50.000", code: "PLN50", price: 52000 },
+          { categoryId: plnCat, name: "Token PLN 100.000", code: "PLN100", price: 102000 }
         );
       }
 
       if (prodsToInsert.length > 0) {
-        await db.insert(products).values(prodsToInsert);
+        await db.insert(products).values(prodsToInsert as any);
       }
     }
   }

@@ -55,6 +55,8 @@ export const api = {
       path: '/api/products' as const,
       input: z.object({
         categoryId: z.coerce.number(),
+        brand: z.string().optional().nullable(),
+        subBrand: z.string().optional().nullable(),
         name: z.string().min(1),
         code: z.string().min(1),
         price: z.coerce.number().min(1),
@@ -70,6 +72,8 @@ export const api = {
       path: '/api/products/:id' as const,
       input: z.object({
         categoryId: z.coerce.number().optional(),
+        brand: z.string().optional().nullable(),
+        subBrand: z.string().optional().nullable(),
         name: z.string().min(1).optional(),
         code: z.string().min(1).optional(),
         price: z.coerce.number().min(1).optional(),

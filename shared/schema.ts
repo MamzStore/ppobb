@@ -21,6 +21,8 @@ export const categories = pgTable("categories", {
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   categoryId: integer("category_id").notNull(),
+  brand: text("brand"),       // e.g. "Telkomsel", "XL", "Indosat"
+  subBrand: text("sub_brand"), // e.g. "Reguler", "Khusus Jateng"
   name: text("name").notNull(),
   code: text("code").notNull().unique(),
   price: integer("price").notNull(), // Price in cents/rupiah
