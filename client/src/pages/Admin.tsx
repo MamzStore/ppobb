@@ -288,9 +288,9 @@ function ProductsPanel({ toast, queryClient }: any) {
       <div className="flex gap-2">
         <input
           value={data.code}
-          onChange={e => onChange({ ...data, code: e.target.value.toUpperCase() })}
+          onChange={e => onChange({ ...data, code: e.target.value })}
           placeholder="Kode SKU"
-          className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-sm outline-none focus:border-primary font-mono uppercase"
+          className="w-full px-3 py-2 border-2 border-gray-200 rounded-xl text-sm outline-none focus:border-primary font-mono"
         />
         <input
           value={data.price}

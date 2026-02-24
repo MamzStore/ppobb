@@ -12,14 +12,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen bg-background flex justify-center items-start sm:py-8 overflow-hidden">
-      <div className="w-full h-full sm:h-[850px] sm:max-w-[400px] bg-gray-50 sm:rounded-[2.5rem] sm:shadow-2xl sm:border-[8px] sm:border-gray-900 overflow-hidden relative flex flex-col">
+    <div className="h-screen bg-background flex justify-center items-center sm:py-8 overflow-hidden">
+      <div className="w-full h-full sm:h-[850px] sm:max-w-[400px] bg-gray-50 sm:rounded-[2.5rem] sm:shadow-2xl sm:border-[8px] sm:border-gray-900 overflow-hidden flex flex-col">
 
-        <main className="flex-1 overflow-y-auto pb-24 relative z-0" style={{ scrollbarWidth: 'none' }}>
+        <main className="flex-1 overflow-y-auto relative z-0" style={{ scrollbarWidth: 'none' }}>
           {children}
         </main>
 
-        <nav className="absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-100 pb-safe pt-2 px-6 z-50">
+        <nav className="flex-shrink-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 pt-2 px-6 z-50">
           <div className="flex justify-around items-center h-16">
             {navItems.map((item) => {
               const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
