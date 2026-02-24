@@ -14,6 +14,7 @@ export interface IStorage {
   getTransactions(userId: number): Promise<(Transaction & { product?: Product })[]>;
   getTransaction(id: number): Promise<Transaction | undefined>;
   createTransaction(tx: CreateTransactionRequest & { amount: number }): Promise<Transaction>;
+  updateTransaction(id: number, updates: Partial<Pick<Transaction, "status" | "refId" | "serialNumber">>): Promise<Transaction>;
   updateUserBalance(userId: number, newBalance: number): Promise<User>;
 }
 
@@ -62,7 +63,15 @@ export class DatabaseStorage implements IStorage {
     const [newTx] = await db.insert(transactions).values(tx).returning();
     return newTx;
   }
-  
+
+  async updateTransaction(id: number, updates: Partial<Pick<Transaction, "status" | "refId" | "serialNumber">>): Promise<Transaction> {
+    const [updated] = await db.update(transactions)
+      .set(updates)
+      .where(eq(transactions.id, id))
+      .returning();
+    return updated;
+  }
+
   async updateUserBalance(userId: number, newBalance: number): Promise<User> {
     const [updated] = await db.update(users)
       .set({ balance: newBalance })

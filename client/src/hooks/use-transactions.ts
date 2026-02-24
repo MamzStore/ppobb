@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl, type TransactionInput } from "@shared/routes";
+import { apiRequest } from "@/lib/queryClient";
 
 export function useTransactions() {
   return useQuery({
@@ -40,17 +41,41 @@ export function useCreateTransaction() {
       });
       
       if (!res.ok) {
+        const errBody = await res.json().catch(() => ({ message: "Terjadi kesalahan" }));
         if (res.status === 400) {
-          const err = api.transactions.create.responses[400].parse(await res.json());
-          throw new Error(err.message || "Bad request");
+          throw new Error(errBody.message || "Bad request");
         }
-        throw new Error("Failed to create transaction");
+        throw new Error(errBody.message || "Failed to create transaction");
       }
       return api.transactions.create.responses[201].parse(await res.json());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.transactions.list.path] });
-      queryClient.invalidateQueries({ queryKey: [api.users.me.path] }); // Refresh balance
+      queryClient.invalidateQueries({ queryKey: [api.users.me.path] });
+    },
+  });
+}
+
+export function useCheckTransactionStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (transactionId: number) => {
+      const url = buildUrl(api.transactions.checkStatus.path, { id: transactionId });
+      const res = await fetch(url, {
+        method: api.transactions.checkStatus.method,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({ message: "Gagal cek status" }));
+        throw new Error(errBody.message || "Gagal cek status");
+      }
+      return api.transactions.checkStatus.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.transactions.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.users.me.path] });
     },
   });
 }

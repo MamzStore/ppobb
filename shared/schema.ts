@@ -34,6 +34,8 @@ export const transactions = pgTable("transactions", {
   targetNumber: text("target_number").notNull(), // Phone number, PLN meter, etc.
   amount: integer("amount").notNull(), // Snapshot of price at purchase time
   status: text("status").notNull().default("pending"), // pending, success, failed
+  refId: text("ref_id"), // Reference ID from MamzStore API
+  serialNumber: text("serial_number"), // SN from MamzStore when transaction is successful
   telegramMessageId: text("telegram_message_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });

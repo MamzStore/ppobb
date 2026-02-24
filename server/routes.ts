@@ -3,6 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import { createMamzTransaction, checkMamzStatus } from "./mamzstore";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -37,12 +38,13 @@ export async function registerRoutes(
     res.json(prods);
   });
 
-  // Transactions
+  // Transactions - List
   app.get(api.transactions.list.path, async (req, res) => {
     const txs = await storage.getTransactions(1); // Hardcoded user 1
     res.json(txs);
   });
 
+  // Transactions - Get by ID
   app.get(api.transactions.get.path, async (req, res) => {
     const tx = await storage.getTransaction(Number(req.params.id));
     if (!tx) {
@@ -51,6 +53,7 @@ export async function registerRoutes(
     res.json(tx);
   });
 
+  // Transactions - Create (with MamzStore integration)
   app.post(api.transactions.create.path, async (req, res) => {
     try {
       const input = api.transactions.create.input.parse(req.body);
@@ -66,19 +69,48 @@ export async function registerRoutes(
       }
       
       if (user.balance < product.price) {
-         return res.status(400).json({ message: "Insufficient balance" });
+        return res.status(400).json({ message: "Saldo tidak cukup" });
       }
       
-      // Deduct balance
+      // Deduct balance first
       await storage.updateUserBalance(user.id, user.balance - product.price);
       
-      // Create transaction
-      const tx = await storage.createTransaction({
+      // Create transaction record in DB with pending status
+      let tx = await storage.createTransaction({
         ...input,
         amount: product.price,
       });
-      
-      // TODO: Connect to Telegram Bot API here
+
+      // Call MamzStore API if API key is configured
+      if (process.env.MAMZSTORE_API_KEY) {
+        try {
+          const mamzResponse = await createMamzTransaction(
+            product.code,
+            input.targetNumber
+          );
+
+          if (mamzResponse.status && mamzResponse.data) {
+            // Update transaction with ref_id from MamzStore
+            tx = await storage.updateTransaction(tx.id, {
+              refId: mamzResponse.data.ref_id,
+              status: "pending",
+            });
+          } else {
+            // MamzStore returned error — refund the user
+            await storage.updateUserBalance(user.id, user.balance);
+            await storage.updateTransaction(tx.id, { status: "failed" });
+            return res.status(400).json({
+              message: mamzResponse.message || "Transaksi gagal di provider",
+            });
+          }
+        } catch (mamzErr) {
+          console.error("MamzStore API error:", mamzErr);
+          // If MamzStore call fails, refund and mark failed
+          await storage.updateUserBalance(user.id, user.balance);
+          await storage.updateTransaction(tx.id, { status: "failed" });
+          return res.status(500).json({ message: "Gagal terhubung ke provider. Silakan coba lagi." });
+        }
+      }
       
       res.status(201).json(tx);
     } catch (err) {
@@ -89,6 +121,59 @@ export async function registerRoutes(
         });
       }
       console.error(err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Transactions - Check Status (polls MamzStore)
+  app.post(api.transactions.checkStatus.path, async (req, res) => {
+    try {
+      const tx = await storage.getTransaction(Number(req.params.id));
+      if (!tx) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+
+      if (!tx.refId) {
+        return res.status(400).json({ message: "Transaksi ini tidak memiliki ref_id dari provider" });
+      }
+
+      if (!process.env.MAMZSTORE_API_KEY) {
+        return res.status(400).json({ message: "MAMZSTORE_API_KEY belum dikonfigurasi" });
+      }
+
+      const statusResponse = await checkMamzStatus(tx.refId);
+      
+      if (!statusResponse.status || !statusResponse.data) {
+        return res.status(400).json({ message: "Gagal mengecek status dari provider" });
+      }
+
+      const mamzStatus = statusResponse.data.status;
+      const sn = statusResponse.data.sn;
+
+      let newStatus: string = tx.status;
+      let serialNumber: string | undefined;
+
+      if (mamzStatus === "Sukses") {
+        newStatus = "success";
+        serialNumber = sn || undefined;
+      } else if (mamzStatus === "Gagal") {
+        newStatus = "failed";
+        // MamzStore auto-refunds balance on their side, but we refund ours too
+        const user = await storage.getUser(tx.userId);
+        if (user && tx.status !== "failed") {
+          await storage.updateUserBalance(user.id, user.balance + tx.amount);
+        }
+      }
+      // If still "Pending", no change
+
+      const updated = await storage.updateTransaction(tx.id, {
+        status: newStatus,
+        ...(serialNumber ? { serialNumber } : {}),
+      });
+
+      res.json(updated);
+    } catch (err) {
+      console.error("Check status error:", err);
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -116,7 +201,6 @@ async function seedDatabase() {
       { name: "Voucher Game", slug: "game", icon: "Gamepad2" },
     ]).returning();
     
-    // Seed products
     if (insertedCats.length > 0) {
       const pulsaCat = insertedCats.find(c => c.slug === "pulsa")?.id;
       const dataCat = insertedCats.find(c => c.slug === "data")?.id;

@@ -78,7 +78,16 @@ export const api = {
         200: z.custom<typeof transactions.$inferSelect>(),
         404: errorSchemas.notFound,
       },
-    }
+    },
+    checkStatus: {
+      method: 'POST' as const,
+      path: '/api/transactions/:id/check-status' as const,
+      responses: {
+        200: z.custom<typeof transactions.$inferSelect>(),
+        400: errorSchemas.badRequest,
+        404: errorSchemas.notFound,
+      },
+    },
   },
 };
 
