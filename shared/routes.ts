@@ -171,3 +171,27 @@ export function buildUrl(path: string, params?: Record<string, string | number>)
 // Type inferences
 export type TransactionInput = z.infer<typeof api.transactions.create.input>;
 export type TransactionResponse = z.infer<typeof api.transactions.create.responses[201]>;
+
+// Topup API contracts (added separately to avoid circular deps with topups table type)
+export const topupApi = {
+  create: {
+    method: 'POST' as const,
+    path: '/api/topup/create' as const,
+    input: z.object({
+      amount: z.coerce.number().min(10000).max(5000000),
+      userId: z.coerce.number().default(1),
+    }),
+  },
+  webhook: {
+    method: 'POST' as const,
+    path: '/api/topup/webhook' as const,
+  },
+  get: {
+    method: 'GET' as const,
+    path: '/api/topup/:id' as const,
+  },
+  list: {
+    method: 'GET' as const,
+    path: '/api/topup' as const,
+  },
+};

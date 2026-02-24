@@ -67,9 +67,11 @@ export default function Home() {
             </div>
 
             <div className="flex gap-3">
-              <button className="flex-1 bg-primary hover:bg-primary/90 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20">
-                <Activity className="w-4 h-4" /> Top Up
-              </button>
+              <Link href="/topup" className="flex-1">
+                <button data-testid="button-topup" className="w-full bg-primary hover:bg-primary/90 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20">
+                  <Activity className="w-4 h-4" /> Top Up
+                </button>
+              </Link>
               <button className="flex-1 bg-white/10 hover:bg-white/20 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 backdrop-blur-md transition-all border border-white/10">
                 <ScanLine className="w-4 h-4" /> Scan QRIS
               </button>

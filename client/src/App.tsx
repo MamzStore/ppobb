@@ -10,12 +10,14 @@ import Home from "@/pages/Home";
 import Category from "@/pages/Category";
 import History from "@/pages/History";
 import Admin from "@/pages/Admin";
+import Topup from "@/pages/Topup";
 
 function Router() {
   return (
     <AppLayout>
       <Switch>
         <Route path="/" component={Home} />
+        <Route path="/topup" component={Topup} />
         <Route path="/category/:id" component={Category} />
         <Route path="/history" component={History} />
         <Route path="/admin" component={Admin} />

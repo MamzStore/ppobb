@@ -1,7 +1,7 @@
 import { db } from "./db";
 import {
-  users, categories, products, transactions,
-  type User, type Category, type Product, type Transaction,
+  users, categories, products, transactions, topups,
+  type User, type Category, type Product, type Transaction, type Topup,
   type InsertProduct, type CreateTransactionRequest
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -20,6 +20,11 @@ export interface IStorage {
   createTransaction(tx: CreateTransactionRequest & { amount: number }): Promise<Transaction>;
   updateTransaction(id: number, updates: Partial<Pick<Transaction, "status" | "refId" | "serialNumber">>): Promise<Transaction>;
   updateUserBalance(userId: number, newBalance: number): Promise<User>;
+  createTopup(data: { userId: number; amount: number; refId: string }): Promise<Topup>;
+  getTopup(id: number): Promise<Topup | undefined>;
+  getTopupByRefId(refId: string): Promise<Topup | undefined>;
+  updateTopup(id: number, updates: Partial<Pick<Topup, "status" | "trxId" | "amountUnique" | "qrString" | "expiredAt">>): Promise<Topup>;
+  getTopups(userId: number): Promise<Topup[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -103,6 +108,35 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
     return updated;
+  }
+
+  async createTopup(data: { userId: number; amount: number; refId: string }): Promise<Topup> {
+    const [newTopup] = await db.insert(topups).values(data).returning();
+    return newTopup;
+  }
+
+  async getTopup(id: number): Promise<Topup | undefined> {
+    const [topup] = await db.select().from(topups).where(eq(topups.id, id));
+    return topup;
+  }
+
+  async getTopupByRefId(refId: string): Promise<Topup | undefined> {
+    const [topup] = await db.select().from(topups).where(eq(topups.refId, refId));
+    return topup;
+  }
+
+  async updateTopup(id: number, updates: Partial<Pick<Topup, "status" | "trxId" | "amountUnique" | "qrString" | "expiredAt">>): Promise<Topup> {
+    const [updated] = await db.update(topups)
+      .set(updates)
+      .where(eq(topups.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getTopups(userId: number): Promise<Topup[]> {
+    return await db.select().from(topups)
+      .where(eq(topups.userId, userId))
+      .orderBy(topups.createdAt);
   }
 }
 

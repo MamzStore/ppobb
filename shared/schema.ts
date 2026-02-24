@@ -29,6 +29,19 @@ export const products = pgTable("products", {
   isActive: boolean("is_active").notNull().default(true),
 });
 
+export const topups = pgTable("topups", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  amount: integer("amount").notNull(),
+  amountUnique: integer("amount_unique"),
+  status: text("status").notNull().default("pending"), // pending, paid, expired
+  trxId: text("trx_id"),
+  refId: text("ref_id").notNull().unique(),
+  qrString: text("qr_string"),
+  expiredAt: timestamp("expired_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const transactions = pgTable("transactions", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
@@ -62,6 +75,7 @@ export const transactionsRelations = relations(transactions, ({ one }) => ({
 }));
 
 // === BASE SCHEMAS ===
+export const insertTopupSchema = createInsertSchema(topups).omit({ id: true, createdAt: true, status: true, amountUnique: true, trxId: true, qrString: true, expiredAt: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true });
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
@@ -76,6 +90,9 @@ export const insertTransactionSchema = createInsertSchema(transactions).omit({
 // === EXPLICIT API CONTRACT TYPES ===
 
 // Base types
+export type Topup = typeof topups.$inferSelect;
+export type InsertTopup = z.infer<typeof insertTopupSchema>;
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 

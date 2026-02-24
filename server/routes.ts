@@ -1,9 +1,10 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
-import { api } from "@shared/routes";
+import { api, topupApi } from "@shared/routes";
 import { z } from "zod";
 import { createMamzTransaction, checkMamzStatus } from "./mamzstore";
+import { createMamzPayment } from "./mamzpay";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -212,6 +213,96 @@ export async function registerRoutes(
       console.error("Check status error:", err);
       res.status(500).json({ message: "Internal server error" });
     }
+  });
+
+  // === TOPUP ===
+
+  // Create QRIS payment
+  app.post(topupApi.create.path, async (req, res) => {
+    try {
+      const input = topupApi.create.input.parse(req.body);
+
+      if (!process.env.MAMZPAY_API_KEY) {
+        return res.status(400).json({ message: "MAMZPAY_API_KEY belum dikonfigurasi. Tambahkan di Secrets." });
+      }
+
+      const refId = `TU-${Date.now()}`;
+      const domain = process.env.REPLIT_DOMAINS;
+      const callbackUrl = domain
+        ? `https://${domain}/api/topup/webhook`
+        : `http://localhost:5000/api/topup/webhook`;
+
+      const mamzResponse = await createMamzPayment(input.amount, refId, callbackUrl);
+
+      if (!mamzResponse.status || !mamzResponse.data) {
+        return res.status(400).json({ message: mamzResponse.message || "Gagal membuat pembayaran" });
+      }
+
+      const { trx_id, amount_unique, qr_string, expired_in } = mamzResponse.data;
+      const expiredAt = new Date(Date.now() + expired_in * 1000);
+
+      // Create topup record
+      let topup = await storage.createTopup({ userId: input.userId, amount: input.amount, refId });
+      topup = await storage.updateTopup(topup.id, {
+        trxId: trx_id,
+        amountUnique: amount_unique,
+        qrString: qr_string,
+        expiredAt,
+      });
+
+      res.status(201).json(topup);
+    } catch (err: any) {
+      console.error("Create topup error:", err);
+      res.status(500).json({ message: err.message || "Internal server error" });
+    }
+  });
+
+  // MamzPay webhook — called by MamzPay when payment is confirmed
+  app.post(topupApi.webhook.path, async (req, res) => {
+    try {
+      const { status, ref_id, amount_received, trx_id_gateway } = req.body;
+
+      if (status !== "PAID" || !ref_id) {
+        return res.status(400).json({ message: "Invalid webhook payload" });
+      }
+
+      const topup = await storage.getTopupByRefId(ref_id);
+      if (!topup) {
+        console.warn(`Webhook: topup not found for ref_id=${ref_id}`);
+        return res.status(200).json({ ok: true }); // Still 200 so MamzPay doesn't retry
+      }
+
+      if (topup.status === "paid") {
+        return res.status(200).json({ ok: true }); // Idempotent
+      }
+
+      await storage.updateTopup(topup.id, { status: "paid" });
+
+      // Add balance to user
+      const user = await storage.getUser(topup.userId);
+      if (user) {
+        await storage.updateUserBalance(user.id, user.balance + topup.amount);
+      }
+
+      console.log(`[Topup] Payment confirmed: ref_id=${ref_id}, amount=${topup.amount}, user=${topup.userId}`);
+      res.status(200).json({ ok: true });
+    } catch (err) {
+      console.error("Webhook error:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Get single topup status (for polling)
+  app.get("/api/topup/:id", async (req, res) => {
+    const topup = await storage.getTopup(Number(req.params.id));
+    if (!topup) return res.status(404).json({ message: "Topup tidak ditemukan" });
+    res.json(topup);
+  });
+
+  // List topup history for current user
+  app.get("/api/topup", async (req, res) => {
+    const topups = await storage.getTopups(1);
+    res.json(topups);
   });
 
   return httpServer;
