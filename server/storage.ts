@@ -2,15 +2,19 @@ import { db } from "./db";
 import {
   users, categories, products, transactions,
   type User, type Category, type Product, type Transaction,
-  type InsertUser, type CreateTransactionRequest
+  type InsertProduct, type CreateTransactionRequest
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
   getCategories(): Promise<Category[]>;
   getProducts(categoryId?: number): Promise<Product[]>;
   getProduct(id: number): Promise<Product | undefined>;
+  createProduct(product: InsertProduct): Promise<Product>;
+  updateProduct(id: number, updates: Partial<InsertProduct>): Promise<Product>;
+  deleteProduct(id: number): Promise<void>;
   getTransactions(userId: number): Promise<(Transaction & { product?: Product })[]>;
   getTransaction(id: number): Promise<Transaction | undefined>;
   createTransaction(tx: CreateTransactionRequest & { amount: number }): Promise<Transaction>;
@@ -22,6 +26,10 @@ export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
   }
 
   async getCategories(): Promise<Category[]> {
@@ -40,6 +48,23 @@ export class DatabaseStorage implements IStorage {
     return product;
   }
 
+  async createProduct(product: InsertProduct): Promise<Product> {
+    const [newProduct] = await db.insert(products).values(product).returning();
+    return newProduct;
+  }
+
+  async updateProduct(id: number, updates: Partial<InsertProduct>): Promise<Product> {
+    const [updated] = await db.update(products)
+      .set(updates)
+      .where(eq(products.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteProduct(id: number): Promise<void> {
+    await db.delete(products).where(eq(products.id, id));
+  }
+
   async getTransactions(userId: number): Promise<(Transaction & { product?: Product })[]> {
     const records = await db.select({
       transaction: transactions,
@@ -47,7 +72,7 @@ export class DatabaseStorage implements IStorage {
     }).from(transactions)
       .leftJoin(products, eq(transactions.productId, products.id))
       .where(eq(transactions.userId, userId));
-      
+
     return records.map(r => ({
       ...r.transaction,
       product: r.product || undefined

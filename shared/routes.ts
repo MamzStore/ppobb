@@ -50,6 +50,66 @@ export const api = {
         200: z.array(z.custom<typeof products.$inferSelect>()),
       },
     },
+    create: {
+      method: 'POST' as const,
+      path: '/api/products' as const,
+      input: z.object({
+        categoryId: z.coerce.number(),
+        name: z.string().min(1),
+        code: z.string().min(1),
+        price: z.coerce.number().min(1),
+        isActive: z.boolean().optional().default(true),
+      }),
+      responses: {
+        201: z.custom<typeof products.$inferSelect>(),
+        400: errorSchemas.badRequest,
+      },
+    },
+    update: {
+      method: 'PATCH' as const,
+      path: '/api/products/:id' as const,
+      input: z.object({
+        categoryId: z.coerce.number().optional(),
+        name: z.string().min(1).optional(),
+        code: z.string().min(1).optional(),
+        price: z.coerce.number().min(1).optional(),
+        isActive: z.boolean().optional(),
+      }),
+      responses: {
+        200: z.custom<typeof products.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/products/:id' as const,
+      responses: {
+        204: z.void(),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
+  admin: {
+    adjustBalance: {
+      method: 'POST' as const,
+      path: '/api/admin/users/:id/balance' as const,
+      input: z.object({
+        amount: z.coerce.number(),
+        type: z.enum(['add', 'subtract', 'set']),
+      }),
+      responses: {
+        200: z.custom<typeof users.$inferSelect>(),
+        400: errorSchemas.badRequest,
+        404: errorSchemas.notFound,
+      },
+    },
+    listUsers: {
+      method: 'GET' as const,
+      path: '/api/admin/users' as const,
+      responses: {
+        200: z.array(z.custom<typeof users.$inferSelect>()),
+      },
+    },
   },
   transactions: {
     list: {

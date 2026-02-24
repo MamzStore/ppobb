@@ -9,7 +9,7 @@ import { AppLayout } from "@/components/AppLayout";
 import Home from "@/pages/Home";
 import Category from "@/pages/Category";
 import History from "@/pages/History";
-import Placeholder from "@/pages/Placeholder";
+import Admin from "@/pages/Admin";
 
 function Router() {
   return (
@@ -18,13 +18,7 @@ function Router() {
         <Route path="/" component={Home} />
         <Route path="/category/:id" component={Category} />
         <Route path="/history" component={History} />
-        {/* Placeholder routes for bottom nav items */}
-        <Route path="/wallet">
-          <Placeholder title="Dompet" />
-        </Route>
-        <Route path="/profile">
-          <Placeholder title="Profil Pengguna" />
-        </Route>
+        <Route path="/admin" component={Admin} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
