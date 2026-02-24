@@ -1,0 +1,47 @@
+DOKUMENTASI API MAMZPAY (PAYMENT GATEWAY)
+​🌐 Informasi Dasar
+Base URL: http://47.236.159.198:5005
+​Content-Type: application/json
+​Method: POST
+​Autentikasi: Menggunakan api_key yang didapatkan merchant dari menu bot 🔑 API Key.
+​🚀 1. CREATE PAYMENT (BUAT TAGIHAN QRIS)
+​Endpoint ini digunakan oleh website Mas (Merchant) untuk me- request pembuatan QRIS Dinamis ke MamzPay. Sistem akan otomatis menambahkan kode unik (1-99) agar pembayaran bisa dideteksi oleh mutasi.
+​A. Endpoint
+​URL: /api/payment/create
+​Fungsi: Menghasilkan string QRIS dinamis beserta nominal unik yang harus dibayar.
+B. Request Payload (JSON)
+​Kirimkan data berikut dari backend website Mas:
+{
+    "api_key": "string",       // Wajib. API Key milik merchant/website.
+    "amount": 50000,           // Wajib. Nominal tagihan asli (tanpa kode unik).
+    "callback_url": "string",  // Wajib. URL webhook di website Mas untuk menerima notifikasi pembayaran sukses.
+    "ref_id": "string"         // Opsional. ID Transaksi / Invoice dari website Mas (Contoh: INV-001).
+}
+C. Response Sukses (HTTP 200)
+​Jika berhasil, MamzPay akan mengembalikan string QRIS yang siap di- render menjadi gambar barcode di sisi website Mas.
+{
+    "status": true,
+    "data": {
+        "trx_id": "PAY-1712345678-45",      // ID Transaksi internal MamzPay
+        "amount": 50000,                    // Nominal asli
+        "amount_unique": 50045,             // Nominal Unik yang WAJIB dibayar pelanggan
+        "qr_string": "000201010212266...",  // Raw data QRIS (Ubah jadi gambar QR di website)
+        "expired_in": 600                   // Waktu kadaluarsa dalam detik (10 menit)
+    }
+}
+D. Response Gagal (HTTP 401 / 500)
+{
+    "status": false,
+    "message": "API Key Invalid" // Pesan error jika API Key salah atau sistem down
+}
+2. WEBHOOK / CALLBACK (NOTIFIKASI KE WEBSITE)
+​Fitur ini adalah inti dari otomatisasi. Saat sistem MamzPay (via Mutasi Sawargi) mendeteksi ada uang masuk sesuai nominal unik, MamzPay akan otomatis menembak data POST ke callback_url yang Mas kirimkan pada Step 1.
+​Payload yang Dikirim MamzPay ke Website Mas:
+​Website Mas harus siap menerima request JSON dengan format berikut:
+{
+    "status": "PAID",
+    "ref_id": "INV-001",               // ID Transaksi (Invoice) dari website Mas
+    "amount_received": 50045,          // Nominal unik yang berhasil masuk ke rekening
+    "trx_id_gateway": "PAY-171234..."  // ID Transaksi internal dari MamzPay
+}
+Catatan: Saat website Mas menerima payload di atas, segera ubah status pesanan pelanggan menjadi "LUNAS/PROSES" di database website.
