@@ -364,4 +364,49 @@ async function seedDatabase() {
       }
     }
   }
+
+  // Seed E-Wallet category separately (runs even if other categories already exist)
+  const ewalletCat = (await storage.getCategories()).find(c => c.slug === "ewallet");
+  if (!ewalletCat) {
+    const [inserted] = await db.insert(categories).values(
+      { name: "E-Wallet", slug: "ewallet", icon: "Wallet" }
+    ).returning();
+
+    if (inserted) {
+      const cid = inserted.id;
+      await db.insert(products).values([
+        // GoPay
+        { categoryId: cid, brand: "GoPay", name: "GoPay 10.000", code: "GOPAY10", price: 11000 },
+        { categoryId: cid, brand: "GoPay", name: "GoPay 20.000", code: "GOPAY20", price: 21000 },
+        { categoryId: cid, brand: "GoPay", name: "GoPay 50.000", code: "GOPAY50", price: 51000 },
+        { categoryId: cid, brand: "GoPay", name: "GoPay 100.000", code: "GOPAY100", price: 101000 },
+        { categoryId: cid, brand: "GoPay", name: "GoPay 200.000", code: "GOPAY200", price: 201000 },
+        // OVO
+        { categoryId: cid, brand: "OVO", name: "OVO 10.000", code: "OVO10", price: 11000 },
+        { categoryId: cid, brand: "OVO", name: "OVO 20.000", code: "OVO20", price: 21000 },
+        { categoryId: cid, brand: "OVO", name: "OVO 50.000", code: "OVO50", price: 51000 },
+        { categoryId: cid, brand: "OVO", name: "OVO 100.000", code: "OVO100", price: 101000 },
+        { categoryId: cid, brand: "OVO", name: "OVO 200.000", code: "OVO200", price: 201000 },
+        // Dana
+        { categoryId: cid, brand: "Dana", name: "Dana 10.000", code: "DANA10", price: 11000 },
+        { categoryId: cid, brand: "Dana", name: "Dana 20.000", code: "DANA20", price: 21000 },
+        { categoryId: cid, brand: "Dana", name: "Dana 50.000", code: "DANA50", price: 51000 },
+        { categoryId: cid, brand: "Dana", name: "Dana 100.000", code: "DANA100", price: 101000 },
+        { categoryId: cid, brand: "Dana", name: "Dana 200.000", code: "DANA200", price: 201000 },
+        // ShopeePay
+        { categoryId: cid, brand: "ShopeePay", name: "ShopeePay 10.000", code: "SPAY10", price: 11000 },
+        { categoryId: cid, brand: "ShopeePay", name: "ShopeePay 20.000", code: "SPAY20", price: 21000 },
+        { categoryId: cid, brand: "ShopeePay", name: "ShopeePay 50.000", code: "SPAY50", price: 51000 },
+        { categoryId: cid, brand: "ShopeePay", name: "ShopeePay 100.000", code: "SPAY100", price: 101000 },
+        { categoryId: cid, brand: "ShopeePay", name: "ShopeePay 200.000", code: "SPAY200", price: 201000 },
+        // LinkAja
+        { categoryId: cid, brand: "LinkAja", name: "LinkAja 10.000", code: "LINKAJA10", price: 11000 },
+        { categoryId: cid, brand: "LinkAja", name: "LinkAja 20.000", code: "LINKAJA20", price: 21000 },
+        { categoryId: cid, brand: "LinkAja", name: "LinkAja 50.000", code: "LINKAJA50", price: 51000 },
+        { categoryId: cid, brand: "LinkAja", name: "LinkAja 100.000", code: "LINKAJA100", price: 101000 },
+        { categoryId: cid, brand: "LinkAja", name: "LinkAja 200.000", code: "LINKAJA200", price: 201000 },
+      ] as any);
+      console.log("[Seed] E-Wallet category and products inserted.");
+    }
+  }
 }
