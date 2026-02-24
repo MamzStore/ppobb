@@ -62,7 +62,12 @@ export default function Topup() {
     return true;
   });
 
-  const isPollingActive = step === "qris";
+  // Sync topupId state when resumeId changes (e.g. navigating from /topup to /topup?resume=N)
+  useEffect(() => {
+    if (resumeId) setTopupId(resumeId);
+  }, [resumeId]);
+
+  const isPollingActive = step === "qris" || !!resumeId;
   const { data: topupStatus } = useTopupStatus(topupId, isPollingActive);
 
   // If resuming an existing topup, jump straight to QRIS step
